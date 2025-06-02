@@ -150,33 +150,13 @@ def GetBeyondTrustData(req: func.HttpRequest) -> func.HttpResponse:
                         "WindowsDownloadURL": windows_download_url,
                         "MacDownloadURL": mac_download_url
                     })
-            logging.info(f"Finished initial processing of installers. Count before final filtering: {len(installer_details_output)}")
+            logging.info(f"Finished processing installers. Total items in output: {len(installer_details_output)}")
         else:
             logging.info("No Jump Client Installers found or the response was empty.")
 
-        # --- Filter for the latest installer per JumpGroupName ---
-        final_output_list = []
-        if installer_details_output:
-            latest_installers_by_group_name = {}
-            for installer_entry in installer_details_output:
-                group_name = installer_entry["JumpGroupName"]
-                current_expiration = installer_entry["ExpirationDate"] # This is 'expiration_timestamp' string
-
-                existing_entry = latest_installers_by_group_name.get(group_name)
-                
-                # If no existing entry for this group_name, or if current_expiration is later.
-                # Valid date strings (like ISO 8601) are lexicographically "greater" than empty strings.
-                if not existing_entry or \
-                   (current_expiration and (not existing_entry["ExpirationDate"] or current_expiration > existing_entry["ExpirationDate"])):
-                    latest_installers_by_group_name[group_name] = installer_entry
-            
-            final_output_list = list(latest_installers_by_group_name.values())
-            logging.info(f"Filtered for latest installer per group. Final items in output: {len(final_output_list)}")
-        
-
         # Return the data as JSON
         return func.HttpResponse(
-            json.dumps(final_output_list), # Use the filtered list
+            json.dumps(installer_details_output),
             mimetype="application/json",
             status_code=200
         )
