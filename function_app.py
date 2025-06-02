@@ -84,14 +84,14 @@ def GetBeyondTrustData(req: func.HttpRequest) -> func.HttpResponse:
         }
         
         all_installers_data = []
-        offset = 0
-        limit = 100  # Assuming a page size of 100 based on your observation
+        current_page = 1 # API uses 1-based indexing for pages
+        per_page = 100  # Equivalent to limit
 
-        logging.info(f"Attempting to retrieve ALL Jump Client Installers from: {base_installers_api_url} with pagination (limit={limit}).")
+        logging.info(f"Attempting to retrieve ALL Jump Client Installers from: {base_installers_api_url} with pagination (per_page={per_page}).")
 
         while True:
-            paginated_url = f"{base_installers_api_url}?limit={limit}&offset={offset}"
-            logging.info(f"Fetching installers page: {paginated_url}")
+            paginated_url = f"{base_installers_api_url}?per_page={per_page}&current_page={current_page}"
+            logging.info(f"Fetching installers page {current_page}: {paginated_url}")
             
             page_response = requests.get(paginated_url, headers=installer_list_headers)
             page_response.raise_for_status()
@@ -109,11 +109,11 @@ def GetBeyondTrustData(req: func.HttpRequest) -> func.HttpResponse:
             all_installers_data.extend(current_page_installers)
             logging.info(f"Retrieved {len(current_page_installers)} installers from this page. Total retrieved so far: {len(all_installers_data)}.")
 
-            if len(current_page_installers) < limit: # Last page reached
+            if len(current_page_installers) < per_page: # Last page reached
                 logging.info("Last page of installers reached.")
                 break
             
-            offset += limit # Prepare for the next page
+            current_page += 1 # Prepare for the next page
 
         all_installers = all_installers_data
         logging.info(f"Successfully retrieved a total of {len(all_installers)} Jump Client Installers after pagination.")
