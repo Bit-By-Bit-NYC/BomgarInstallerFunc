@@ -77,16 +77,46 @@ def GetBeyondTrustData(req: func.HttpRequest) -> func.HttpResponse:
         jump_group_map = {group['id']: group['name'] for group in all_jump_groups}
 
         # --- Fetch All Jump Client Installers ---
-        all_installers_api_url = f"{beyond_trust_site_url}/api/config/v1/jump-client/installer"
+        base_installers_api_url = f"{beyond_trust_site_url}/api/config/v1/jump-client/installer"
         installer_list_headers = {
             "Authorization": f"{token_type} {access_token}",
             "Accept": "application/json"
         }
-        logging.info(f"Attempting to retrieve ALL Jump Client Installers from: {all_installers_api_url}")
-        all_installers_response = requests.get(all_installers_api_url, headers=installer_list_headers)
-        all_installers_response.raise_for_status()
-        all_installers = all_installers_response.json()
-        logging.info(f"Successfully retrieved {len(all_installers)} Jump Client Installers.")
+        
+        all_installers_data = []
+        offset = 0
+        limit = 100  # Assuming a page size of 100 based on your observation
+
+        logging.info(f"Attempting to retrieve ALL Jump Client Installers from: {base_installers_api_url} with pagination (limit={limit}).")
+
+        while True:
+            paginated_url = f"{base_installers_api_url}?limit={limit}&offset={offset}"
+            logging.info(f"Fetching installers page: {paginated_url}")
+            
+            page_response = requests.get(paginated_url, headers=installer_list_headers)
+            page_response.raise_for_status()
+            current_page_installers = page_response.json()
+
+            if not isinstance(current_page_installers, list):
+                logging.error(f"Expected a list of installers but got {type(current_page_installers)}. Stopping.")
+                # Potentially raise an error or return an appropriate HTTP response
+                break 
+
+            if not current_page_installers: # No more installers on this page
+                logging.info("No more installers found on this page. End of data.")
+                break
+            
+            all_installers_data.extend(current_page_installers)
+            logging.info(f"Retrieved {len(current_page_installers)} installers from this page. Total retrieved so far: {len(all_installers_data)}.")
+
+            if len(current_page_installers) < limit: # Last page reached
+                logging.info("Last page of installers reached.")
+                break
+            
+            offset += limit # Prepare for the next page
+
+        all_installers = all_installers_data
+        logging.info(f"Successfully retrieved a total of {len(all_installers)} Jump Client Installers after pagination.")
 
         installer_details_output = []
         if all_installers:
