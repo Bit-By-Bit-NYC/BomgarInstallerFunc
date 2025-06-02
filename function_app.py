@@ -137,16 +137,19 @@ def GetBeyondTrustData(req: func.HttpRequest) -> func.HttpResponse:
                     reverse=True
                 )
 
-                for installer in sorted_installers:
-                    installer_id = installer.get('installer_id')
+                # Select only the installer with the latest expiration date for this group
+                if sorted_installers: # Check if there are any installers for this group
+                    latest_installer_for_group = sorted_installers[0] # The first one is the latest due to reverse sort
+                    
+                    installer_id = latest_installer_for_group.get('installer_id')
                     windows_download_url = f"{beyond_trust_site_url}/download_client_connector?jc={installer_id}&p=winNT-64-msi"
                     mac_download_url = f"{beyond_trust_site_url}/download_client_connector?jc={installer_id}&p=mac-osx-x86"
 
                     installer_details_output.append({
                         "JumpGroupName": jump_group_name,
-                        "InstallerName": installer.get('name'),
+                        "InstallerName": latest_installer_for_group.get('name'),
                         "InstallerID": installer_id,
-                        "ExpirationDate": installer.get('expiration_timestamp'),
+                        "ExpirationDate": latest_installer_for_group.get('expiration_timestamp'),
                         "WindowsDownloadURL": windows_download_url,
                         "MacDownloadURL": mac_download_url
                     })
