@@ -11,7 +11,7 @@ import azure.functions as func
 app = func.FunctionApp()
 
 # Define your HTTP trigger function using a decorator
-@app.route(route="GetBeyondTrustData", methods=["GET"])
+@app.route(route="GetBeyondTrustData", methods=["GET"], auth_level=func.AuthLevel.ANONYMOUS)
 def GetBeyondTrustData(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Python HTTP trigger function processed a request.')
 
