@@ -7,7 +7,7 @@ import requests # Used for making HTTP requests
 
 import azure.functions as func
 
-# Initialize the Function App instance
+# Initialize the Function App instance 
 app = func.FunctionApp()
 
 # Define your HTTP trigger function using a decorator
