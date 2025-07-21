@@ -3,7 +3,7 @@ import logging
 import os
 import json
 import base64
-import requests # Used for making HTTP requests
+import requests # Used for making HTTP requests 
 
 import azure.functions as func
 
