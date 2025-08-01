@@ -126,7 +126,7 @@ def GetBeyondTrustJumpClientIPs(req: func.HttpRequest) -> func.HttpResponse:
         if all_jump_clients:
             for item in all_jump_clients:
                 # A jump client can have a public and/or a private IP
-                for ip_field in ['public_ip', 'private_ip']:
+                for ip_field in ['public_ip']:
                     ip_value = item.get(ip_field)
                     if ip_value:
                         try:
