@@ -31,9 +31,9 @@ def GetBeyondTrustData(req: func.HttpRequest) -> func.HttpResponse:
             status_code=500
         )
 
-@app.route(route="GetBeyondTrustJumpItemIPs", methods=["GET"], auth_level=func.AuthLevel.ANONYMOUS)
-def GetBeyondTrustJumpItemIPs(req: func.HttpRequest) -> func.HttpResponse:
-    logging.info('Python HTTP trigger function processed a request for Jump Item IPs.')
+@app.route(route="GetBeyondTrustJumpClientIPs", methods=["GET"], auth_level=func.AuthLevel.ANONYMOUS)
+def GetBeyondTrustJumpClientIPs(req: func.HttpRequest) -> func.HttpResponse:
+    logging.info('Python HTTP trigger function processed a request for Jump Client IPs.')
 
     # Retrieve BeyondTrust credentials from environment variables
     beyond_trust_site_url = os.environ.get('BeyondTrustSiteUrl')
@@ -81,59 +81,62 @@ def GetBeyondTrustJumpItemIPs(req: func.HttpRequest) -> func.HttpResponse:
             )
         logging.info("Successfully obtained access token.")
 
-        # --- Fetch all Jump Items with pagination ---
-        jump_items_api_url = f"{beyond_trust_site_url}/api/config/v1/jump-item"
+        # --- Fetch all Jump Clients with pagination ---
+        jump_clients_api_url = f"{beyond_trust_site_url}/api/config/v1/jump-client"
         api_headers = {
             "Authorization": f"{token_type} {access_token}",
             "Accept": "application/json"
         }
         
-        all_jump_items = []
+        all_jump_clients = []
         current_page = 1
         per_page = 100
 
-        logging.info(f"Attempting to retrieve ALL Jump Items from: {jump_items_api_url} with pagination.")
+        logging.info(f"Attempting to retrieve ALL Jump Clients from: {jump_clients_api_url} with pagination.")
 
         while True:
-            paginated_url = f"{jump_items_api_url}?per_page={per_page}&current_page={current_page}"
-            logging.info(f"Fetching jump items page {current_page}: {paginated_url}")
+            paginated_url = f"{jump_clients_api_url}?per_page={per_page}&current_page={current_page}"
+            logging.info(f"Fetching jump clients page {current_page}: {paginated_url}")
             
             page_response = requests.get(paginated_url, headers=api_headers)
             page_response.raise_for_status()
-            current_page_items = page_response.json()
+            current_page_clients = page_response.json()
 
-            if not isinstance(current_page_items, list):
-                logging.error(f"Expected a list of jump items but got {type(current_page_items)}. Stopping.")
+            if not isinstance(current_page_clients, list):
+                logging.error(f"Expected a list of jump clients but got {type(current_page_clients)}. Stopping.")
                 break
 
-            if not current_page_items:
-                logging.info("No more jump items found on this page. End of data.")
+            if not current_page_clients:
+                logging.info("No more jump clients found on this page. End of data.")
                 break
             
-            all_jump_items.extend(current_page_items)
-            logging.info(f"Retrieved {len(current_page_items)} jump items from this page. Total retrieved so far: {len(all_jump_items)}.")
+            all_jump_clients.extend(current_page_clients)
+            logging.info(f"Retrieved {len(current_page_clients)} jump clients from this page. Total retrieved so far: {len(all_jump_clients)}.")
 
-            if len(current_page_items) < per_page:
-                logging.info("Last page of jump items reached.")
+            if len(current_page_clients) < per_page:
+                logging.info("Last page of jump clients reached.")
                 break
             
             current_page += 1
 
-        logging.info(f"Successfully retrieved a total of {len(all_jump_items)} Jump Items.")
+        logging.info(f"Successfully retrieved a total of {len(all_jump_clients)} Jump Clients.")
 
-        # --- Process Jump Items to get IPs ---
+        # --- Process Jump Clients to get IPs ---
         ip_addresses = set() # Use a set to store unique IPs
-        if all_jump_items:
-            for item in all_jump_items:
-                hostname = item.get('hostname')
-                if hostname:
-                    try:
-                        ipaddress.ip_address(hostname) # Validate if it's an IP
-                        ip_addresses.add(hostname)
-                    except ValueError:
-                        # Not a valid IP address, so we skip it.
-                        logging.debug(f"'{hostname}' is not a valid IP address, skipping.")
-                        pass
+        if all_jump_clients:
+            for item in all_jump_clients:
+                # A jump client can have a public and/or a private IP
+                for ip_field in ['public_ip', 'private_ip']:
+                    ip_value = item.get(ip_field)
+                    if ip_value:
+                        try:
+                            # Validate that the value is a legitimate IP address
+                            ipaddress.ip_address(ip_value)
+                            ip_addresses.add(ip_value)
+                        except ValueError:
+                            # The value in the IP field is not a valid IP address, skip it.
+                            logging.debug(f"Value '{ip_value}' from field '{ip_field}' is not a valid IP address, skipping.")
+                            pass
         
         logging.info(f"Found {len(ip_addresses)} unique IP addresses.")
 
