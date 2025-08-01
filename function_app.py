@@ -4,6 +4,7 @@ import os
 import json
 import base64
 import requests # Used for making HTTP requests 
+import ipaddress # For IP address validation
 
 import azure.functions as func
 
@@ -27,6 +28,138 @@ def GetBeyondTrustData(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(
             json.dumps({"error": error_msg}),
             mimetype="application/json",
+            status_code=500
+        )
+
+@app.route(route="GetBeyondTrustJumpItemIPs", methods=["GET"], auth_level=func.AuthLevel.ANONYMOUS)
+def GetBeyondTrustJumpItemIPs(req: func.HttpRequest) -> func.HttpResponse:
+    logging.info('Python HTTP trigger function processed a request for Jump Item IPs.')
+
+    # Retrieve BeyondTrust credentials from environment variables
+    beyond_trust_site_url = os.environ.get('BeyondTrustSiteUrl')
+    api_key = os.environ.get('BeyondTrustApiKey')
+    api_secret = os.environ.get('BeyondTrustApiSecret')
+
+    # --- Basic Variable Check ---
+    if not beyond_trust_site_url or not api_key or not api_secret:
+        error_msg = "Error: BeyondTrust credentials environment variables are not set."
+        logging.error(error_msg)
+        return func.HttpResponse(
+            error_msg,
+            mimetype="text/plain",
+            status_code=500
+        )
+
+    try:
+        # --- Authentication Step ---
+        auth_url = f"{beyond_trust_site_url}/oauth2/token"
+        auth_string = f"{api_key}:{api_secret}"
+        base64_auth_string = base64.b64encode(auth_string.encode('utf-8')).decode('utf-8')
+
+        auth_headers = {
+            "Authorization": f"Basic {base64_auth_string}",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json"
+        }
+        auth_body = {"grant_type": "client_credentials"}
+
+        logging.info(f"Attempting to obtain access token from: {auth_url}")
+        auth_response = requests.post(auth_url, headers=auth_headers, data=auth_body)
+        auth_response.raise_for_status()
+        auth_token_response = auth_response.json()
+
+        access_token = auth_token_response.get('access_token')
+        token_type = auth_token_response.get('token_type')
+
+        if not access_token:
+            error_details = auth_token_response.get('error_description', 'Unknown authentication error.')
+            logging.error(f"Failed to obtain access token. Details: {error_details}")
+            return func.HttpResponse(
+                f"Failed to obtain access token: {error_details}",
+                mimetype="text/plain",
+                status_code=401
+            )
+        logging.info("Successfully obtained access token.")
+
+        # --- Fetch all Jump Items with pagination ---
+        jump_items_api_url = f"{beyond_trust_site_url}/api/config/v1/jump-item"
+        api_headers = {
+            "Authorization": f"{token_type} {access_token}",
+            "Accept": "application/json"
+        }
+        
+        all_jump_items = []
+        current_page = 1
+        per_page = 100
+
+        logging.info(f"Attempting to retrieve ALL Jump Items from: {jump_items_api_url} with pagination.")
+
+        while True:
+            paginated_url = f"{jump_items_api_url}?per_page={per_page}&current_page={current_page}"
+            logging.info(f"Fetching jump items page {current_page}: {paginated_url}")
+            
+            page_response = requests.get(paginated_url, headers=api_headers)
+            page_response.raise_for_status()
+            current_page_items = page_response.json()
+
+            if not isinstance(current_page_items, list):
+                logging.error(f"Expected a list of jump items but got {type(current_page_items)}. Stopping.")
+                break
+
+            if not current_page_items:
+                logging.info("No more jump items found on this page. End of data.")
+                break
+            
+            all_jump_items.extend(current_page_items)
+            logging.info(f"Retrieved {len(current_page_items)} jump items from this page. Total retrieved so far: {len(all_jump_items)}.")
+
+            if len(current_page_items) < per_page:
+                logging.info("Last page of jump items reached.")
+                break
+            
+            current_page += 1
+
+        logging.info(f"Successfully retrieved a total of {len(all_jump_items)} Jump Items.")
+
+        # --- Process Jump Items to get IPs ---
+        ip_addresses = set() # Use a set to store unique IPs
+        if all_jump_items:
+            for item in all_jump_items:
+                hostname = item.get('hostname')
+                if hostname:
+                    try:
+                        ipaddress.ip_address(hostname) # Validate if it's an IP
+                        ip_addresses.add(hostname)
+                    except ValueError:
+                        # Not a valid IP address, so we skip it.
+                        logging.debug(f"'{hostname}' is not a valid IP address, skipping.")
+                        pass
+        
+        logging.info(f"Found {len(ip_addresses)} unique IP addresses.")
+
+        # --- Return as text/plain ---
+        output_text = "\n".join(sorted(list(ip_addresses)))
+        
+        return func.HttpResponse(
+            output_text,
+            mimetype="text/plain",
+            status_code=200
+        )
+
+    except requests.exceptions.HTTPError as e:
+        status_code = e.response.status_code
+        error_details = e.response.text
+        logging.error(f"HTTP Error: {status_code} - {error_details}")
+        return func.HttpResponse(
+            f"API request failed: {e}\nDetails: {error_details}",
+            mimetype="text/plain",
+            status_code=status_code
+        )
+    except Exception as e:
+        logging.error(f"An unexpected error occurred: {e}")
+        return func.HttpResponse(
+            f"An unexpected error occurred: {e}",
+            mimetype="text/plain",
             status_code=500
         )
 
