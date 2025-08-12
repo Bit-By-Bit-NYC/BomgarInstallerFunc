@@ -1,4 +1,5 @@
-AI-generated code summary of function_app.py
+AI-generated code summary of function_app.py:
+
 This document provides a detailed explanation and reference for the provided Python code, which is designed to be deployed as an Azure Function. The script defines two separate HTTP trigger functions to interact with the BeyondTrust Privileged Remote Access API.
 
 1. GetBeyondTrustData 📄
