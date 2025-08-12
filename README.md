@@ -1,71 +1,109 @@
-BeyondTrust Azure Function Documentation 🚀
-This document provides a detailed explanation and reference for the provided Python code, which is designed to be deployed as an Azure Function. The script defines two separate HTTP trigger functions to interact with the BeyondTrust Privileged Remote Access API.
+# `README.md` for BeyondTrust Azure Function 💻
 
-1. GetBeyondTrustData 📄
-Function: This function retrieves and processes information about BeyondTrust Jump Client installers. It's designed to be a data source for other systems, like an Intune app deployment script.
+### Overview
 
-Workflow:
+This repository contains Python code for an Azure Function App that provides two HTTP-triggered endpoints. These functions interact with the BeyondTrust Privileged Remote Access API to retrieve key information about your environment. This is useful for integrating BeyondTrust data into other systems, such as endpoint management solutions like Intune or network security tools for firewall rule automation.
 
-Environment Variable Check: It first verifies that the necessary environment variables (BeyondTrustSiteUrl, BeyondTrustApiKey, BeyondTrustApiSecret) are set. These variables are crucial for authenticating with the BeyondTrust API.
+### Endpoints 🚀
 
-OAuth 2.0 Authentication: It authenticates with the BeyondTrust API using a client_credentials grant type. It constructs an Authorization header with a Base64-encoded string of the api_key and api_secret.
+The function app exposes the following endpoints:
 
-Fetch Jump Groups: It makes an API call to .../api/config/v1/jump-group to get a list of all Jump Groups. This is used to map jump_group_id to jump_group_name later.
+#### 1. `GET /api/GetBeyondTrustData`
 
-Fetch Jump Client Installers (with Pagination): It makes a series of API calls to .../api/config/v1/jump-client/installer. This API endpoint supports pagination, so the code iteratively fetches all pages of installers.
+This endpoint retrieves and processes information about BeyondTrust Jump Client installers. It's designed to return details for the **most recently created installer** for each Jump Group.
 
-Data Processing: After collecting all installers, it performs the following:
+**Response:** Returns a JSON array of objects. Each object represents an installer and includes the following fields:
 
-Groups the installers by their jump_group_id.
+* `JumpGroupName`: The name of the Jump Group.
+* `InstallerName`: The name of the installer.
+* `InstallerID`: The unique ID of the installer.
+* `ExpirationDate`: The expiration timestamp of the installer.
+* `WindowsDownloadURL`: A direct download URL for the Windows MSI installer.
+* `MacDownloadURL`: A direct download URL for the macOS installer.
 
-Within each group, it sorts the installers by expiration_timestamp in descending order.
+**Example JSON Response:**
 
-It selects only the single installer with the latest expiration date for each group.
+```json
+[
+  {
+    "JumpGroupName": "IT Support Team",
+    "InstallerName": "ITSupport-2025-08-12",
+    "InstallerID": "0123456789abcdef",
+    "ExpirationDate": "2026-08-12T17:00:00Z",
+    "WindowsDownloadURL": "[https://beyondtrust.example.com/download_client_connector?jc=0123456789abcdef&p=winNT-64-msi](https://beyondtrust.example.com/download_client_connector?jc=0123456789abcdef&p=winNT-64-msi)",
+    "MacDownloadURL": "[https://beyondtrust.example.com/download_client_connector?jc=0123456789abcdef&p=mac-osx-x86](https://beyondtrust.example.com/download_client_connector?jc=0123456789abcdef&p=mac-osx-x86)"
+  }
+]
+```
 
-Construct Output: It creates a JSON object for each selected installer, containing the JumpGroupName, InstallerName, InstallerID, ExpirationDate, and a dynamically generated WindowsDownloadURL and MacDownloadURL.
+#### 2. `GET /api/GetBeyondTrustJumpClientIPs`
 
-Return: The function returns an HTTP 200 OK response with a JSON body containing the list of processed installer details. It includes robust try...except blocks to handle HTTP errors and other unexpected exceptions, returning appropriate status codes (401, 500) and error messages.
+This endpoint retrieves a sorted list of all unique public IP addresses for currently deployed BeyondTrust Jump Clients. This is particularly useful for dynamically updating firewall rules to permit traffic from your remote Jump Clients.
 
-Reference API Endpoints:
+**Response:** Returns a `text/plain` body with one IP address per line.
 
-GET {BeyondTrustSiteUrl}/api/config/v1/jump-group
+**Example Text Response:**
 
-GET {BeyondTrustSiteUrl}/api/config/v1/jump-client/installer
+```text
+192.0.2.1
+198.51.100.2
+203.0.113.3
+```
 
-POST {BeyondTrustSiteUrl}/oauth2/token
+### Configuration ⚙️
 
-2. GetBeyondTrustJumpClientIPs 🖥️
-Function: This function retrieves a list of public IP addresses for all deployed BeyondTrust Jump Clients. This is useful for firewall rules or other security purposes where you need to allow inbound connections from the Jump Clients.
+This Azure Function requires the following Application Settings (environment variables) to be configured in your Azure Function App instance.
 
-Workflow:
+| Name | Value | Description |
+|---|---|---|
+| `BeyondTrustSiteUrl` | `https://beyondtrust.example.com` | The base URL for your BeyondTrust site. |
+| `BeyondTrustApiKey` | `<Your-API-Key>` | The API key generated in the BeyondTrust Admin console. |
+| `BeyondTrustApiSecret` | `<Your-API-Secret>` | The corresponding API secret. |
 
-Environment Variable Check: Same as the previous function, it checks for the required environment variables.
+### Requirements 📋
 
-OAuth 2.0 Authentication: It performs the same authentication process to obtain a valid access token.
+* Python 3.8+
+* The following Python libraries:
+    * `azure-functions`
+    * `requests`
 
-Fetch Jump Clients (with Pagination): It makes paginated API calls to .../api/config/v1/jump-client to retrieve all Jump Clients.
+These can be installed using `pip`:
 
-IP Address Extraction and Validation: It iterates through all the retrieved Jump Clients and extracts the public_ip for each one.
+```bash
+pip install azure-functions requests
+```
 
-A set is used to automatically store only unique IP addresses.
+### Deployment to Azure ☁️
 
-It uses the ipaddress library to validate that each value is a legitimate IP address before adding it to the set, preventing malformed data from being included.
+1. Create a new Function App in the Azure portal.
+2. Choose the Python runtime stack.
+3. Configure the required **Application Settings** listed above.
+4. Deploy this code to your Function App using your preferred method (e.g., Azure CLI, VS Code extension, or CI/CD pipeline).
 
-Return: It returns an HTTP 200 OK response with a text/plain body. The body contains a newline-separated list of all unique, validated public IP addresses, sorted alphabetically. Error handling is also included to provide clear messages and appropriate status codes (401, 500) in case of failure.
+### How to Use the `GetBeyondTrustData` Endpoint
 
-Reference API Endpoints:
+You can call this endpoint from other services, like a PowerShell script for Intune. Here's a quick example of a PowerShell script to download the latest Windows installer:
 
-GET {BeyondTrustSiteUrl}/api/config/v1/jump-client
+```powershell
+# The following script is for downloading the BeyondTrust Jump Client installer.
+$beyondTrustUrl = "https://<your-function-app>.azurewebsites.net/api/GetBeyondTrustData"
+$outputPath = "C:\Temp\BeyondTrust_Installer.msi"
 
-POST {BeyondTrustSiteUrl}/oauth2/token
-
-General Notes 📝
-Technology Stack: This script is written in Python and is designed to run as an Azure Function. The decorators (@app.route(...)) are specific to the Azure Functions v2 programming model for Python.
-
-Dependencies: The code relies on the requests library for HTTP calls, base64 for encoding, and ipaddress for IP validation. azure.functions is the core library for the Azure Function environment.
-
-Authentication: Authentication is handled securely using environment variables for the API key and secret, and the OAuth 2.0 client credentials flow. The access token is then used as a Bearer token for subsequent API calls.
-
-Error Handling: Both functions include comprehensive try...except blocks to gracefully handle various errors, including missing environment variables, failed authentication, HTTP errors from the API, and unexpected runtime exceptions. This ensures the function provides informative error messages and appropriate HTTP status codes to the caller.
-
-Efficiency: The code uses pagination to handle large numbers of Jump Clients or installers, preventing a single request from timing out or consuming too much memory. It also uses a set to efficiently store unique IP addresses without duplicates.
+try {
+    Write-Host "Fetching BeyondTrust installer data from the Azure Function..."
+    $response = Invoke-RestMethod -Uri $beyondTrustUrl -Method GET
+    
+    if ($null -ne $response -and $response.Count -gt 0) {
+        # Assuming you want the first installer returned
+        $installerUrl = $response[0].WindowsDownloadURL
+        
+        Write-Host "Downloading latest installer from: $installerUrl"
+        Invoke-WebRequest -Uri $installerUrl -OutFile $outputPath
+        
+    } else {
+        Write-Host "No installer data received from the function."
+    }
+}
+catch {
+    Write-Host "An error occurred: $_"
+}
